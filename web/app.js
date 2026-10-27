@@ -100,6 +100,7 @@ $("theme-btn").addEventListener("click", () => {
   const next = { "": "dark", dark: "light", light: "" }[store.get(THEME_STORE)] ?? "";
   store.set(THEME_STORE, next);
   applyTheme(next);
+  if (net.ctx) syncNetTheme();
 });
 
 $("key-form").addEventListener("submit", (e) => {
@@ -151,9 +152,29 @@ function segmented(el, onChange) {
 // Signals start at the message's words, pass through two hidden layers and land on a team.
 // Each signal's destination is sampled from the model's real probabilities; words that moved
 // the decision more fire more often.
-const NET_COLORS = { payments: "#21a690", cards: "#6f8bf5", loans: "#d19a3e", account: "#ad78d6", fraud: "#f0566c", review: "#8a94a6" };
-const SIGNALS = ["#7dd3fc", "#a5b4fc", "#c4b5fd"]; // sky, indigo, violet: one cool family for the network
-const NEURON = "#a5b4fc";
+// Two palettes for the network: luminous on the dark stage, deep and crisp on the light stage.
+const NET_THEMES = {
+  dark: {
+    cats: { payments: "#21a690", cards: "#6f8bf5", loans: "#d19a3e", account: "#ad78d6", fraud: "#f0566c", review: "#8a94a6" },
+    signals: ["#7dd3fc", "#a5b4fc", "#c4b5fd"], neuron: "#a5b4fc", neuronRing: "#e0e7ff",
+    edge: "165,180,252", edgeA: 0.04, edgeW: 0.07, hidA: 0.06, idleNode: "#0d1426", idleRing: "rgba(165,180,252,0.35)",
+    blend: "lighter", core: "rgba(248,250,255,", text: "238,242,248", accent: "#7dd3fc", tokenHi: "#ffffff", haloA: 0.13,
+  },
+  light: {
+    cats: { payments: "#00806a", cards: "#2b4fd8", loans: "#a86b12", account: "#7a3e9d", fraud: "#c81e33", review: "#7a8394" },
+    signals: ["#0ea5e9", "#6366f1", "#8b5cf6"], neuron: "#6366f1", neuronRing: "#4338ca",
+    edge: "79,70,229", edgeA: 0.05, edgeW: 0.09, hidA: 0.07, idleNode: "#ffffff", idleRing: "rgba(79,70,229,0.35)",
+    blend: "source-over", core: "rgba(255,255,255,", text: "14,23,38", accent: "#4f46e5", tokenHi: "#1e1b4b", haloA: 0.16,
+  },
+};
+let T = NET_THEMES.dark;
+const NET_COLORS = new Proxy({}, { get: (_, k) => T.cats[k] });
+function syncNetTheme() {
+  const mode = getComputedStyle($("viz")).getPropertyValue("--s-mode").trim();
+  T = NET_THEMES[mode === "light" ? "light" : "dark"];
+  net.particles = [];
+  net.dirty = true;
+}
 const H1 = 7, H2 = 6;
 const net = { ctx: null, w: 0, h: 0, tokens: [], h1: [], h2: [], anchors: {}, glow: {}, particles: [], spawn: 0, last: 0, dirty: true };
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -184,6 +205,7 @@ function buildNet() {
 function layoutNet() {
   const viz = $("viz");
   if (!viz || !viz.clientWidth || !net.ctx) return;
+  syncNetTheme();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   net.w = viz.clientWidth;
   net.h = viz.clientHeight;
@@ -276,7 +298,7 @@ function spawnParticle() {
     pts.push([to.x - 46, (pts[3][1] + to.y) / 2], [to.x, to.y]);
     nodes.push(null, current.category);
   }
-  const signal = SIGNALS[Math.floor(Math.random() * SIGNALS.length)];
+  const signal = T.signals[Math.floor(Math.random() * T.signals.length)];
   net.particles.push({ pts, nodes, seg: 0, t: 0, speed: 230 + Math.random() * 90, color: signal,
     dest: current ? NET_COLORS[cat] : signal, hop: current ? NET_COLORS[current.category] : signal,
     alpha: current ? 1 : 0.5, trail: [] });
@@ -325,48 +347,48 @@ function draw() {
 
   // connections
   for (const t of net.tokens) for (const n of net.h1) {
-    g.strokeStyle = `rgba(165,180,252,${0.04 + t.w * 0.07})`;
+    g.strokeStyle = `rgba(${T.edge},${T.edgeA + t.w * T.edgeW})`;
     g.beginPath(); g.moveTo(t.x, t.y); g.lineTo(n.x, n.y); g.stroke();
   }
-  g.strokeStyle = "rgba(165,180,252,0.06)";
+  g.strokeStyle = `rgba(${T.edge},${T.hidA})`;
   for (const a of net.h1) for (const b of net.h2) { g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); }
   for (const c of ORDER) {
     const an = net.anchors[c];
     if (!an) continue;
     const p = probs ? probs[c] : 0.2;
-    g.strokeStyle = probs ? rgba(NET_COLORS[c], 0.03 + p * 0.4) : "rgba(165,180,252,0.06)";
+    g.strokeStyle = probs ? rgba(NET_COLORS[c], 0.03 + p * 0.4) : `rgba(${T.edge},${T.hidA})`;
     g.lineWidth = probs ? 1 + p * 1.6 : 1;
     for (const b of net.h2) { g.beginPath(); g.moveTo(b.x, b.y); g.lineTo(an.x, an.y); g.stroke(); }
   }
   g.lineWidth = 1;
 
   // signals
-  g.globalCompositeOperation = "lighter";
+  g.globalCompositeOperation = T.blend;
   for (const p of net.particles) {
     if (p.trail.length > 1) {
       g.strokeStyle = rgba(p.color, 0.28 * p.alpha);
       g.lineWidth = 1.6;
       g.beginPath(); g.moveTo(...p.trail[0]); p.trail.forEach((q) => g.lineTo(...q)); g.stroke();
     }
-    g.fillStyle = rgba(p.color, 0.13 * p.alpha);
+    g.fillStyle = rgba(p.color, T.haloA * p.alpha);
     g.beginPath(); g.arc(p.x, p.y, 7, 0, 7); g.fill();
     g.fillStyle = rgba(p.color, 0.55 * p.alpha);
     g.beginPath(); g.arc(p.x, p.y, 2.6, 0, 7); g.fill();
-    g.fillStyle = `rgba(248,250,255,${0.9 * p.alpha})`;
+    g.fillStyle = `${T.core}${0.9 * p.alpha})`;
     g.beginPath(); g.arc(p.x, p.y, 1.2, 0, 7); g.fill();
   }
 
   // hidden neurons
   for (const n of [...net.h1, ...net.h2]) {
     if (n.act > 0.02) {
-      g.fillStyle = rgba(NEURON, n.act * 0.22);
+      g.fillStyle = rgba(T.neuron, n.act * 0.22);
       g.beginPath(); g.arc(n.x, n.y, 6 + n.act * 11, 0, 7); g.fill();
     }
   }
   g.globalCompositeOperation = "source-over";
   for (const n of [...net.h1, ...net.h2]) {
-    g.fillStyle = n.act > 0.05 ? rgba(NEURON, 0.15 + n.act * 0.85) : "#0d1426";
-    g.strokeStyle = n.act > 0.05 ? rgba("#e0e7ff", 0.5 + n.act * 0.5) : "rgba(165,180,252,0.35)";
+    g.fillStyle = n.act > 0.05 ? rgba(T.neuron, 0.15 + n.act * 0.85) : T.idleNode;
+    g.strokeStyle = n.act > 0.05 ? rgba(T.neuronRing, 0.5 + n.act * 0.5) : T.idleRing;
     g.lineWidth = 1.25;
     g.beginPath(); g.arc(n.x, n.y, 4.5, 0, 7); g.fill(); g.stroke();
   }
@@ -382,31 +404,32 @@ function draw() {
   }
 
   // input words
-  const accent = "#7dd3fc";
+  const accent = T.accent;
   g.font = `500 12px ${getComputedStyle(document.body).getPropertyValue("--mono") || "monospace"}`;
   g.textAlign = "right";
   g.textBaseline = "middle";
   for (const t of net.tokens) {
     if (t.w > 0.6) { g.fillStyle = rgba(accent, 0.22 * t.w); g.beginPath(); g.arc(t.x, t.y, 9, 0, 7); g.fill(); }
-    g.fillStyle = t.w > 0.6 ? accent : `rgba(255,255,255,${0.35 + t.w * 0.5})`;
+    g.fillStyle = t.w > 0.6 ? accent : `rgba(${T.text},${0.3 + t.w * 0.5})`;
     g.beginPath(); g.arc(t.x, t.y, 3 + t.w * 1.5, 0, 7); g.fill();
     if (t.text) {
       let label = t.text;
       while (label.length > 1 && g.measureText(label).width > net.labelW - 6) label = label.slice(0, -1);
       if (label !== t.text) label = `${label.slice(0, -1)}…`;
-      g.fillStyle = t.w > 0.6 ? "#ffffff" : `rgba(238,242,248,${0.4 + t.w * 0.45})`;
+      g.fillStyle = t.w > 0.6 ? T.tokenHi : `rgba(${T.text},${0.45 + t.w * 0.45})`;
       g.fillText(label, t.x - 12, t.y);
     }
   }
   if (!net.tokens[0]?.text) {
     g.textAlign = "left";
-    g.fillStyle = "rgba(238,242,248,0.4)";
+    g.fillStyle = `rgba(${T.text},0.45)`;
     g.fillText("Your message", 0, net.tokens[0].y);
   }
 }
 
 function clearNet() {
   current = null;
+  net.particles = [];
   $("viz").classList.remove("has");
   setTokens(null);
   document.querySelectorAll(".out").forEach((o) => {
@@ -423,6 +446,8 @@ function clearNet() {
 }
 
 function renderNet(d) {
+  // A different outcome must not show dots still travelling from the previous one.
+  if (!current || current.category !== d.category || current.model_category !== d.model_category) net.particles = [];
   current = d;
   $("viz").classList.add("has");
   setTokens(d);
@@ -1065,6 +1090,8 @@ function modelHTML(m, versions) {
 }
 
 /* ---------- Start ---------- */
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (net.ctx) syncNetTheme(); });
+
 (async function init() {
   try {
     const [taxo, ready] = await Promise.all([api("/api/v1/taxonomy"), api("/ready")]);
