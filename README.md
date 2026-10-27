@@ -34,7 +34,7 @@ Or with Docker: `docker compose up --build`. The image trains the model during t
 |---|---|
 | **NLP models** | TF-IDF word and character n-grams; 4 model families tuned with 5-fold cross-validation; a 5-class category model plus an 83-topic sub-intent model; word-level explanations |
 | **Privacy** | Card numbers (Luhn-checked), IBANs, sort codes, account numbers, emails and phone numbers are masked before classification, storage and logging |
-| **Business rules** | `configs/routing_rules.yaml`: review threshold, fraud-phrase escalation, priority overrides (bereavement, complaints, account takeover). Editable without retraining and hot-reloadable |
+| **Business rules** | `configs/routing_rules.yaml`: review threshold, two-tier fraud escalation (strong phrases like “skimmed” always escalate; ambiguous words like “fraud” need model support), priority overrides (bereavement, complaints, account takeover). Editable without retraining and hot-reloadable |
 | **Routing** | Team, priority (urgent / high / normal), response deadline (1 h for fraud up to 48 h for loans), second category for mixed messages, manual review below 60% confidence, an audit of which rules fired |
 | **Tickets** | Stored with a full event history (created, re-routed, status, assigned, note); filter, search and sort by urgency |
 | **Feedback loop** | Agent re-routes are saved as labels; `make retrain` learns from them |
@@ -42,7 +42,7 @@ Or with Docker: `docker compose up --build`. The image trains the model during t
 | **API** | Versioned `/api/v1`, OpenAPI docs, optional API keys, rate limiting, batch and CSV endpoints, request IDs |
 | **Observability** | JSON logs, Prometheus `/metrics` (traffic, latency, categories, rule hits, PII redactions), `/health` and `/ready` |
 | **Delivery** | Makefile, pyproject, multi-stage Dockerfile, docker-compose, GitHub Actions CI (lint → train with gate → test → Docker build) |
-| **UI** | Route, Inbox, Batch, Analytics and Model views; light and dark mode; works on mobile |
+| **UI** | Live routing as you type, visualised as a neural network driven by the real model output; Inbox, Batch, Analytics and Model views; light and dark mode; works on mobile |
 
 ## Results
 
@@ -68,19 +68,20 @@ Every training run writes its full model card, figures and misclassified example
 
 ```bash
 curl -X POST http://127.0.0.1:8077/api/v1/classify -H 'Content-Type: application/json' \
-  -d '{"text": "My card 4539 1488 0343 6467 was used in a shop I have never been to", "channel": "app"}'
+  -d '{"text": "My card 4539 1488 0343 6467 was skimmed at the ATM", "channel": "app"}'
 ```
 
-The response (abridged) shows the masked text, the rule that caught what the model missed, and the ticket:
+The response (abridged) shows the masked text, and the rule that caught what the model missed (the model said Cards):
 
 ```json
 {
-  "text": "My card [CARD] was used in a shop I have never been to",
+  "text": "My card [CARD] was skimmed at the ATM",
   "pii_redacted": ["CARD"],
   "category": "fraud", "model_category": "cards",
+  "intent": {"intent": "lost_or_stolen_card", "label": "Lost or stolen card"},
   "department": "Fraud & Security Team", "priority": "urgent", "sla_hours": 1,
-  "rules_applied": [{"rule": "fraud_escalation", "detail": "keyword “never been to”; model gave fraud 18%, top was Cards 82%"}],
-  "ticket_ref": "TKT-000611"
+  "rules_applied": [{"rule": "fraud_escalation", "detail": "strong fraud phrase “skimmed”; model said Cards 100%, fraud 0%"}],
+  "ticket_ref": "TKT-000629"
 }
 ```
 

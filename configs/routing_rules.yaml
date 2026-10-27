@@ -1,0 +1,59 @@
+# Business routing rules. Operations teams can change these without retraining the model.
+# Changes take effect on API restart or POST /api/v1/admin/reload-model.
+
+# Below this top-category probability, a query goes to manual review.
+review_threshold: 0.60
+
+# A second category is attached when its probability is at least this (mixed-topic messages).
+secondary_threshold: 0.20
+
+# Safety net for fraud: a missed fraud report costs far more than a misrouted card question.
+# Strong phrases are unambiguous signs of fraud and escalate on their own.
+# Weak words also appear in ordinary questions ("how do I report fraud on my loan application"),
+# so they only escalate when the model gives fraud at least min_fraud_probability.
+fraud_escalation:
+  enabled: true
+  min_fraud_probability: 0.10
+  strong_keywords:
+    - unauthorised
+    - unauthorized
+    - "didn't authorise"
+    - "didn't authorize"
+    - "i never authorised"
+    - "i never authorized"
+    - "didn't make"
+    - did not make
+    - "i never made"
+    - "wasn't me"
+    - "never been to"
+    - someone used my
+    - without my permission
+    - hacked
+    - scam
+    - scammed
+    - scammer
+    - phishing
+    - cloned
+    - skimmed
+    - skimming
+  keywords:
+    - "don't recognise"
+    - "don't recognize"
+    - not recognised
+    - not recognized
+    - stolen
+    - fraud
+    - compromised
+    - suspicious
+
+# Raise priority regardless of category. Highest matching priority wins.
+priority_overrides:
+  - name: vulnerable_customer
+    priority: high
+    keywords: [bereavement, passed away, died, funeral, vulnerable, disability, hospital, carer]
+  - name: formal_complaint
+    priority: high
+    keywords: [ombudsman, legal action, lawyer, solicitor, formal complaint, regulator]
+  - name: account_takeover
+    priority: urgent
+    keywords: [locked out, changed my password, someone logged in, sim swap, new device i don't recognise]

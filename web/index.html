@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Routing Desk</title>
+  <meta name="description" content="Classifies customer banking messages and routes them to the right team in real time.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230e1726'/%3E%3Cpath d='M8 16h6l4-6h6M14 16l4 6h6' stroke='white' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M8 16h6l4-6h6M14 16l4 6h6"/></svg>
+      <div><div class="logo-name">Routing Desk</div><div class="logo-sub">Customer operations</div></div>
+    </div>
+
+    <nav class="nav" role="tablist" aria-label="Sections" aria-orientation="vertical">
+      <button role="tab" id="tab-route" aria-controls="panel-route" aria-selected="true">
+        <svg viewBox="0 0 24 24"><path d="M4 12h5l3-6h8M9 12l3 6h8"/></svg><span>Route</span></button>
+      <button role="tab" id="tab-inbox" aria-controls="panel-inbox" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24"><path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5 5h14l2 8v6H3v-6z"/></svg><span>Inbox</span><em class="nav-badge" id="inbox-count"></em></button>
+      <button role="tab" id="tab-batch" aria-controls="panel-batch" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5z"/><path d="m3 13 9 5 9-5"/></svg><span>Batch</span></button>
+      <button role="tab" id="tab-analytics" aria-controls="panel-analytics" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Analytics</span></button>
+      <button role="tab" id="tab-model" aria-controls="panel-model" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><span>Model</span></button>
+    </nav>
+
+    <div class="side-foot">
+      <div class="model-chip" id="status"><span class="dot"></span><div><div class="mc-label">Production model</div><div class="mc-val mono" id="status-text">Connecting…</div></div></div>
+      <div class="side-links">
+        <a href="/docs" target="_blank" rel="noopener">API docs</a>
+        <a href="/metrics" target="_blank" rel="noopener">Metrics</a>
+        <button type="button" class="theme-btn" id="theme-btn" aria-label="Switch colour theme" title="Switch theme">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="keybar" id="keybar" hidden>
+      <form id="key-form">
+        <label for="api-key">This server requires an API key.</label>
+        <input id="api-key" type="password" autocomplete="off" placeholder="Paste API key">
+        <button class="btn btn-primary" type="submit">Use key</button>
+      </form>
+    </div>
+
+    <!-- ROUTE -->
+    <section class="panel" id="panel-route" role="tabpanel" aria-labelledby="tab-route">
+      <header class="page-head">
+        <div>
+          <h1>Route a message</h1>
+          <p>Paste what the customer wrote. It’s classified as you type; nothing is saved until you create the ticket.</p>
+        </div>
+      </header>
+
+      <div class="stage">
+        <div class="stage-input">
+          <div class="field-head">
+            <label for="query">Customer message</label>
+            <span class="live" id="live"><span class="live-dot"></span><span id="live-text">Waiting for input</span></span>
+          </div>
+          <textarea id="query" rows="6" maxlength="2000" placeholder="e.g. There’s a payment on my card I didn’t make"></textarea>
+          <div class="samples" id="samples" aria-label="Example messages"></div>
+          <div class="stage-actions">
+            <label class="sr-only" for="channel">Channel</label>
+            <select id="channel">
+              <option value="app">Mobile app</option><option value="web">Web</option><option value="chat">Live chat</option>
+              <option value="email">Email</option><option value="phone">Phone</option><option value="branch">Branch</option>
+            </select>
+            <button type="button" class="btn btn-light" id="route-btn" disabled>Create ticket</button>
+          </div>
+          <p class="error" id="route-error" role="alert" hidden></p>
+        </div>
+
+        <div class="stage-viz">
+          <ol class="pipeline" id="pipeline" aria-label="Processing steps">
+            <li data-step="pii"><span class="tick"></span><span><b>Mask</b><em id="st-pii">personal data</em></span></li>
+            <li data-step="cat"><span class="tick"></span><span><b>Classify</b><em id="st-cat">5 categories</em></span></li>
+            <li data-step="topic"><span class="tick"></span><span><b>Topic</b><em id="st-topic">83 topics</em></span></li>
+            <li data-step="rules"><span class="tick"></span><span><b>Rules</b><em id="st-rules">business rules</em></span></li>
+          </ol>
+          <div class="viz" id="viz">
+            <canvas id="net" aria-hidden="true"></canvas>
+            <div class="viz-legend" aria-hidden="true"><span id="leg-in">Input words</span><span id="leg-hid">Hidden layers</span></div>
+            <ol class="outs" id="outs" aria-label="Team probabilities"></ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="result-grid" id="result" hidden>
+        <article class="card decision">
+          <div class="card-head"><h2>Decision</h2><span class="badge" id="r-priority"></span></div>
+          <div class="decision-cat"><span class="cat-dot" id="r-dot"></span><div><div id="r-cat"></div><div class="decision-sub" id="r-sub"></div></div></div>
+          <dl class="kv">
+            <dt>Team</dt><dd id="r-team"></dd>
+            <dt>Confidence</dt><dd><span class="mono" id="r-conf"></span><span class="meter"><span id="r-meter"></span></span></dd>
+            <dt>Respond by</dt><dd id="r-due"></dd>
+            <dt>Also about</dt><dd id="r-also"></dd>
+          </dl>
+        </article>
+        <article class="card">
+          <div class="card-head"><h2>Why</h2><span class="hint">Highlighted words moved the decision most</span></div>
+          <p class="quote" id="r-quote"></p>
+          <ul class="flags" id="r-flags"></ul>
+        </article>
+        <article class="card">
+          <div class="card-head"><h2>Topic</h2><span class="hint">Most likely specific issue</span></div>
+          <ol class="topics" id="r-topics"></ol>
+        </article>
+      </div>
+    </section>
+
+    <!-- INBOX -->
+    <section class="panel" id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox" hidden>
+      <header class="page-head">
+        <div><h1>Inbox</h1><p>Tickets sorted by urgency, then deadline. Re-routing a ticket teaches the next model.</p></div>
+      </header>
+      <div class="toolbar">
+        <div class="seg" id="inbox-status" role="group" aria-label="Status">
+          <button type="button" data-v="open,in_progress" aria-pressed="true">Active</button>
+          <button type="button" data-v="resolved" aria-pressed="false">Resolved</button>
+          <button type="button" data-v="" aria-pressed="false">All</button>
+        </div>
+        <select id="inbox-dept" aria-label="Team"><option value="">All teams</option></select>
+        <select id="inbox-priority" aria-label="Priority"><option value="">Any priority</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option></select>
+        <label class="check"><input type="checkbox" id="inbox-review"> Needs review</label>
+        <div class="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="search" id="inbox-q" placeholder="Search messages or TKT-…" aria-label="Search tickets">
+        </div>
+      </div>
+      <div class="inbox">
+        <div class="card queue-card">
+          <div class="queue-meta" id="queue-meta"></div>
+          <ol class="queue" id="queue"></ol>
+          <button class="btn btn-ghost more" type="button" id="queue-more" hidden>Load more</button>
+        </div>
+        <article class="card ticket" id="ticket" aria-live="polite">
+          <div class="empty">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5 5h14l2 8v6H3v-6z"/></svg>
+            <p class="empty-title">Select a ticket</p>
+            <p>See why it was routed there, change its status, or send it to another team.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- BATCH -->
+    <section class="panel" id="panel-batch" role="tabpanel" aria-labelledby="tab-batch" hidden>
+      <header class="page-head">
+        <div><h1>Batch routing</h1><p>Route a backlog in one go: paste messages or upload a CSV.</p></div>
+      </header>
+      <div class="card batch-input">
+        <div class="batch-text">
+          <label for="batch-text" class="label">Messages, one per line</label>
+          <textarea id="batch-text" rows="9" placeholder="My card hasn’t arrived yet&#10;I want to close my account&#10;What is the interest rate on a car loan?"></textarea>
+        </div>
+        <div class="batch-side">
+          <label class="drop" id="drop" for="batch-file">
+            <input type="file" id="batch-file" accept=".csv,.txt">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
+            <span class="drop-title">Upload CSV</span>
+            <span>A <code>text</code> column, or one message per line. Up to 1,000 rows.</span>
+            <span class="drop-file mono" id="drop-file"></span>
+          </label>
+          <label class="check"><input type="checkbox" id="batch-tickets"> Create a ticket for each message</label>
+          <div class="row-end">
+            <button class="btn btn-ghost" type="button" id="batch-sample">Load examples</button>
+            <button class="btn btn-primary" type="button" id="batch-btn">Route all</button>
+          </div>
+          <p class="error" id="batch-error" role="alert" hidden></p>
+        </div>
+      </div>
+      <div id="batch-results" hidden>
+        <div class="section-head">
+          <h2 id="batch-title"></h2>
+          <button class="btn btn-ghost" type="button" id="batch-download">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg>Download CSV</button>
+        </div>
+        <div class="split" id="batch-split"></div>
+        <div class="chips-row" id="batch-filters" role="group" aria-label="Filter by category"></div>
+        <div class="card table-card">
+          <table>
+            <thead><tr><th>Message (masked)</th><th>Category</th><th>Topic</th><th>Team</th><th class="num">Confidence</th></tr></thead>
+            <tbody id="batch-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ANALYTICS -->
+    <section class="panel" id="panel-analytics" role="tabpanel" aria-labelledby="tab-analytics" hidden>
+      <header class="page-head">
+        <div><h1>Analytics</h1><p>Volumes, deadlines and how often agents had to correct the model.</p></div>
+        <div class="seg" id="an-window" role="group" aria-label="Time range">
+          <button type="button" data-v="7" aria-pressed="false">7d</button>
+          <button type="button" data-v="14" aria-pressed="true">14d</button>
+          <button type="button" data-v="30" aria-pressed="false">30d</button>
+        </div>
+      </header>
+      <div id="analytics"><p class="muted">Loading…</p></div>
+    </section>
+
+    <!-- MODEL -->
+    <section class="panel" id="panel-model" role="tabpanel" aria-labelledby="tab-model" hidden>
+      <div id="model-report"><p class="muted">Loading…</p></div>
+    </section>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

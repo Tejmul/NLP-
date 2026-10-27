@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.env
+data/processed/
+data/*.db
+data/*.db-*
+models/registry/v*/
+!models/registry/.gitkeep
+models/registry/production.json

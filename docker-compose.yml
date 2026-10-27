@@ -1,0 +1,17 @@
+services:
+  api:
+    build: .
+    image: bankq:latest
+    ports:
+      - "8077:8077"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      BANKQ_DATABASE_URL: sqlite:////app/data/bankq.db
+    volumes:
+      - bankq-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  bankq-data:
