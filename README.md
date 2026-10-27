@@ -99,7 +99,7 @@ The response (abridged) shows the masked text, and the rule that caught what the
 
 ## Configuration
 
-All settings are `BANKQ_*` environment variables (see `.env.example`). The important ones:
+All  settings are `BANKQ_*` environment variables (see `.env.example`). The important ones:
 
 - `BANKQ_API_KEYS`: comma-separated keys. When set, every `/api/v1` call needs an `X-API-Key` header, and the UI asks for one. **When empty, auth is off. Only run like that locally.**
 - `BANKQ_DATABASE_URL`: SQLite by default; any SQLAlchemy URL, e.g. Postgres.
